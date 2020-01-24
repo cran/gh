@@ -6,7 +6,7 @@ test_that("repos, some basics", {
   skip_if_offline()
   skip_on_cran()
   skip("needs mocking")
-  
+
   res <- gh("/user/repos", .token = tt())
   expect_true(all(c("id", "name", "full_name") %in% names(res[[1]])))
 
@@ -104,3 +104,30 @@ test_that("repos, some basics", {
   )
   expect_equal(res[[1]], "")            # TODO: better return value here?
 })
+
+test_that("repo files", {
+  skip_if_offline()
+  skip_on_cran()
+  skip("needs mocking")
+
+  res <- gh(
+    "GET /repos/:owner/:repo/contents/:path",
+    owner = "r-lib",
+    repo = "gh",
+    path = "DESCRIPTION",
+    .send_headers = c(Accept = "application/vnd.github.v3.raw"),
+    .token = tt()
+  )
+
+  expect_equal(attr(res, "response")[["x-github-media-type"]],
+               "github.v3; param=raw")
+  expect_equal(class(res), c("gh_response", "raw"))
+
+  tmp <- tempfile()
+  res <- gh("/orgs/:org/repos", org = "r-lib", type = "sources", .token = tt())
+  res_file <- gh("/orgs/:org/repos", org = "r-lib", type = "sources",
+                    destfile = tmp, .token = tt())
+  expect_equal(class(res_file), c("gh_response", "path"))
+  expect_equivalent(res, jsonlite::fromJSON(res_file,  simplifyVector = FALSE))
+
+  })

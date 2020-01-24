@@ -7,20 +7,19 @@
 gh_whoami(.token = NULL, .api_url = NULL, .send_headers = NULL)
 }
 \arguments{
-\item{.token}{Authentication token.}
+\item{.token}{Authentication token. Defaults to \code{GITHUB_PAT} or
+\code{GITHUB_TOKEN} environment variables, in this order if any is set.
+See \code{\link[=gh_token]{gh_token()}} if you need more flexibility, e.g. different tokens
+for different GitHub Enterprise deployments.}
 
-\item{.api_url}{Github API url (default: \url{https://api.github.com}).
-Used if \code{endpoint} just contains a path.}
+\item{.api_url}{Github API url (default: \url{https://api.github.com}). Used
+if \code{endpoint} just contains a path. Defaults to \code{GITHUB_API_URL}
+environment variable if set.}
 
 \item{.send_headers}{Named character vector of header field values
-(excepting \code{Authorization}, which is handled via
-\code{.token}). This can be used to override or augment the
-defaults, which are as follows: the \code{Accept} field defaults
-to \code{"application/vnd.github.v3+json"} and the
-\code{User-Agent} field defaults to
-\code{"https://github.com/r-lib/gh"}. This can be used
-to, e.g., provide a custom media type, in order to access a
-preview feature of the API.}
+(except \code{Authorization}, which is handled via \code{.token}). This can be
+used to override or augment the default \code{User-Agent} header:
+\code{"https://github.com/r-lib/gh"}.}
 }
 \value{
 A \code{gh_response} object, which is also a \code{list}.
@@ -35,14 +34,11 @@ Get a personal access token for the GitHub API from
 your planned tasks. The \code{repo} scope, for example, is one many are
 likely to need. The token itself is a string of 40 letters and digits. You
 can store it any way you like and provide explicitly via the \code{.token}
-argument to \code{\link{gh}()}.
+argument to \code{\link[=gh]{gh()}}.
 
 However, many prefer to define an environment variable \code{GITHUB_PAT} (or
 \code{GITHUB_TOKEN}) with this value in their \code{.Renviron} file. Add a
-line that looks like this, substituting your PAT:
-
-\preformatted{
-GITHUB_PAT=8c70fd8419398999c9ac5bacf3192882193cadf2
+line that looks like this, substituting your PAT:\preformatted{GITHUB_PAT=8c70fd8419398999c9ac5bacf3192882193cadf2
 }
 
 Put a line break at the end! If you’re using an editor that shows line
@@ -54,17 +50,17 @@ To get complete information on the authenticated user, call
 \code{gh("/user")}.
 
 For token management via API (versus the browser), use the
-\href{https://developer.github.com/v3/oauth_authorizations/}{OAuth
-Authorizations API}. This API requires Basic Authentication using your
-username and password, not tokens, and is outside the scope of the \code{gh}
-package.
+\href{https://developer.github.com/v3/oauth_authorizations}{Authorizations API}.
+This API requires Basic Authentication using your username and password,
+not tokens, and is outside the scope of the gh package.
 }
 \examples{
-\dontrun{
+\dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 gh_whoami()
-
+\dontshow{\}) # examplesIf}
+\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 ## explicit token + use with GitHub Enterprise
 gh_whoami(.token = "8c70fd8419398999c9ac5bacf3192882193cadf2",
           .api_url = "https://github.foobar.edu/api/v3")
-}
+\dontshow{\}) # examplesIf}
 }

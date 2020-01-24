@@ -17,8 +17,10 @@ Minimalistic client to access
 ## Installation
 
 
+Install the package from CRAN as usual:
+
 ```r
-devtools::install_github("r-lib/gh")
+install.packages("gh")
 ```
 
 ## Usage
@@ -60,7 +62,7 @@ as extra arguments:
 
 
 ```r
-j_repos <- gh("/users/:username/repos", username = "jeroenooms")
+j_repos <- gh("/users/:username/repos", username = "jeroen")
 vapply(j_repos, "[[", "", "name")
 ```
 
@@ -127,6 +129,12 @@ vapply(my_repos2, "[[", "", "name")
 #> [23] "trump"                   "user2016-tutorial-shiny"
 #> [25] "webdriver"               "whoami"
 ```
+
+## Environment Variables
+
++ The `GITHUB_API_URL` environment variable is used for the default github api url. 
++ One of `GITHUB_PAT` or `GITHUB_TOKEN` environment variables is used, in this
+order, as default token.
 
 ## License
 

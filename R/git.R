@@ -4,13 +4,12 @@
 #' current project.
 #'
 #' @param path Path that is contained within a git repo.
-#' @return If the repo has a github remote, a list containing \code{username}
-#'    and \code{repo}. Otherwise, an error.
+#' @return If the repo has a github remote, a list containing `username`
+#'    and `repo`. Otherwise, an error.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' gh_tree_remote()
-#' }
+
 gh_tree_remote <- function(path = ".") {
   github_remote(git_remotes(path))
 }
@@ -20,7 +19,7 @@ github_remote <- function(x) {
   remotes <- remotes[!vapply(remotes, is.null, logical(1))]
 
   if (length(remotes) == 0) {
-    stop("No github remotes found", call. = FALSE)
+    throw(new_error("No github remotes found", call. = FALSE))
   }
 
   if (length(remotes) > 1) {
@@ -60,7 +59,9 @@ git_remotes <- function(path = ".") {
   conf <- git_config(path)
   remotes <- conf[grepl("^remote", names(conf))]
 
+  remotes <- discard(remotes, function(x) is.null(x$url))
   urls <- vapply(remotes, "[[", "url", FUN.VALUE = character(1))
+
   names(urls) <- gsub('^remote "(.*?)"$', "\\1", names(remotes))
   urls
 }
@@ -70,7 +71,7 @@ git_remotes <- function(path = ".") {
 git_config <- function(path = ".") {
   config_path <- file.path(repo_root(path), ".git", "config")
   if (!file.exists(config_path)) {
-    stop("git config does not exist", call. = FALSE)
+    throw(new_error("git config does not exist", call. = FALSE))
 
   }
   ini::read.ini(config_path, "UTF-8")
@@ -78,13 +79,13 @@ git_config <- function(path = ".") {
 
 repo_root <- function(path = ".") {
   if (!file.exists(path)) {
-    stop("Can't find '", path, "'.", call. = FALSE)
+    throw(new_error("Can't find '", path, "'.", call. = FALSE))
   }
 
   # Walk up to root directory
   while (!has_git(path)) {
     if (is_root(path)) {
-      stop("Could not find git root.", call. = FALSE)
+      throw(new_error("Could not find git root.", call. = FALSE))
     }
 
     path <- dirname(path)

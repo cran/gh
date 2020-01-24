@@ -1,27 +1,31 @@
 ## Main API URL
-default_api_url <- "https://api.github.com"
+default_api_url <- function() {
+  Sys.getenv('GITHUB_API_URL', unset = "https://api.github.com")
+}
 
 ## Headers to send with each API request
-default_send_headers <- c("Accept" = "application/vnd.github.v3+json",
-                          "User-Agent" = "https://github.com/r-lib/gh")
+default_send_headers <- c("User-Agent" = "https://github.com/r-lib/gh")
 
 gh_build_request <- function(endpoint = "/user", params = list(),
-                             token = NULL, send_headers = NULL,
+                             token = NULL, destfile = NULL, overwrite = NULL,
+                             accept = NULL, send_headers = NULL,
                              api_url = NULL, method = "GET") {
 
   working <- list(method = method, url = character(), headers = NULL,
                   query = NULL, body = NULL,
                   endpoint = endpoint, params = params,
-                  token = token, send_headers = send_headers, api_url = api_url)
+                  token = token, accept = c(Accept = accept),
+                  send_headers = send_headers, api_url = api_url,
+                  dest = destfile, overwrite = overwrite)
 
   working <- gh_set_verb(working)
   working <- gh_set_endpoint(working)
   working <- gh_set_query(working)
   working <- gh_set_body(working)
-  working <- gh_set_headers(working)
   working <- gh_set_url(working)
-  working[c("method", "url", "headers", "query", "body")]
-
+  working <- gh_set_headers(working)
+  working <- gh_set_dest(working)
+  working[c("method", "url", "headers", "query", "body", "dest")]
 }
 
 
@@ -87,13 +91,18 @@ gh_set_body <- function(x) {
     warning("This is a 'GET' request and unnamed parameters are being ignored.")
     return(x)
   }
-  x$body <- toJSON(x$params, auto_unbox = TRUE)
+  if (length(x$params) == 1 && is.raw(x$params[[1]])) {
+    x$body <- x$params[[1]]
+  } else {
+    x$body <- toJSON(x$params, auto_unbox = TRUE)
+  }
   x
 }
 
 gh_set_headers <- function(x) {
-  auth <- gh_auth(x$token %||% gh_token())
-  send_headers <- gh_send_headers(x$send_headers)
+  # x$api_url must be set properly at this point
+  auth <- gh_auth(x$token %||% gh_token(x$api_url))
+  send_headers <- gh_send_headers(x$accept, x$send_headers)
   x$headers <- c(send_headers, auth)
   x
 }
@@ -101,30 +110,28 @@ gh_set_headers <- function(x) {
 gh_set_url <- function(x) {
   if (grepl("^https?://", x$endpoint)) {
     x$url <- URLencode(x$endpoint)
+    x$api_url <- get_baseurl(x$url)
   } else {
-    api_url <- x$api_url %||% Sys.getenv('GITHUB_API_URL', unset = default_api_url)
-    x$url <- URLencode(paste0(api_url, x$endpoint))
+    x$api_url <- x$api_url %||% default_api_url()
+    x$url <- URLencode(paste0(x$api_url, x$endpoint))
   }
 
   x
 }
 
-## functions to retrieve request elements
-## possibly consult an env var or combine with a built-in default
-
-gh_token <- function() {
-  token <- Sys.getenv('GITHUB_PAT', "")
-  if (token == "") Sys.getenv("GITHUB_TOKEN", "") else token
-}
-
-gh_auth <- function(token) {
-  if (isTRUE(token != "")) {
-    c("Authorization" = paste("token", token))
+#' @importFrom httr write_disk write_memory
+gh_set_dest <- function(x) {
+  if (is.null(x$dest)) {
+    x$dest <- write_memory()
   } else {
-    character()
+    x$dest <- write_disk(x$dest, overwrite = x$overwrite)
   }
+  x
 }
 
-gh_send_headers <- function(headers = NULL) {
-  modify_vector(default_send_headers, headers)
+gh_send_headers <- function(accept_header = NULL, headers = NULL) {
+  modify_vector(
+    modify_vector(default_send_headers, accept_header),
+    headers
+  )
 }
