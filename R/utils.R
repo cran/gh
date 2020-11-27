@@ -1,4 +1,5 @@
 
+
 trim_ws <- function(x) {
   sub("\\s*$", "", sub("^\\s*", "", x))
 }
@@ -95,8 +96,6 @@ is_interactive <- function() {
   } else if (identical(opt, FALSE)) {
     FALSE
   } else if (tolower(getOption("knitr.in.progress", "false")) == "true") {
-    FALSE
-  } else if (tolower(getOption("rstudio.notebook.executing", "false")) == "true") {
     FALSE
   } else if (identical(Sys.getenv("TESTTHAT"), "true")) {
     FALSE

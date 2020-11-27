@@ -19,7 +19,7 @@
 #' GITHUB_PAT=8c70fd8419398999c9ac5bacf3192882193cadf2
 #' ```
 #'
-#' Put a line break at the end! If you’re using an editor that shows line
+#' Put a line break at the end! If you're using an editor that shows line
 #' numbers, there should be (at least) two lines, where the second one is empty.
 #' Restart R for this to take effect. Call `gh_whoami()` to confirm
 #' success.
@@ -28,7 +28,7 @@
 #' `gh("/user")`.
 #'
 #' For token management via API (versus the browser), use the
-#' [Authorizations API](https://developer.github.com/v3/oauth_authorizations).
+#' [OAuth Authorizations API](https://docs.github.com/v3/oauth_authorizations/).
 #' This API requires Basic Authentication using your username and password,
 #' not tokens, and is outside the scope of the gh package.
 #'
@@ -59,14 +59,8 @@ gh_whoami <- function(.token = NULL, .api_url = NULL, .send_headers = NULL) {
   scopes <- attr(res, "response")[["x-oauth-scopes"]]
   res <- res[c("name", "login", "html_url")]
   res$scopes <- scopes
-  res$token <- obfuscate(.token)
+  res$token <- format(gh_pat(.token))
   ## 'gh_response' class has to be restored
   class(res) <- c("gh_response", "list")
   res
-}
-
-obfuscate <- function(x, first = 2, last = 0) {
-  paste0(substr(x, start = 1, stop = first),
-         "...",
-         substr(x, start = nchar(x) - last + 1, stop = nchar(x)))
 }

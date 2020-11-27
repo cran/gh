@@ -1,7 +1,7 @@
 #' A simple interface for the GitHub GraphQL API v4.
 #'
 #' See more about the GraphQL API here:
-#' <https://developer.github.com/v4/>
+#' <https://docs.github.com/graphql>
 #'
 #' Note: pagination and the `.limit` argument does not work currently,
 #' as pagination in the GraphQL API is different from the v3 API.
@@ -14,12 +14,11 @@
 #' @examplesIf FALSE
 #' gh_gql("query { viewer { login }}")
 
-gh_gql <- function(query, ..., .token = NULL, .destfile = NULL,
-  .overwrite = FALSE, .api_url = NULL, .send_headers = NULL) {
+gh_gql <- function(query, ...) {
 
   if (".limit" %in% names(list(...))) {
     stop("`.limit` does not work with the GraphQL API")
   }
 
-  gh(endpoint = "POST /graphql", query = query, ..., .token = .token)
+  gh(endpoint = "POST /graphql", query = query, ...)
 }
