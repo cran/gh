@@ -1,6 +1,6 @@
 Package: gh
 Title: 'GitHub' 'API'
-Version: 1.2.0
+Version: 1.2.1
 Authors@R: 
     c(person(given = "Gábor",
              family = "Csárdi",
@@ -24,14 +24,13 @@ Suggests: covr, knitr, rmarkdown, rprojroot, spelling, testthat (>=
 VignetteBuilder: knitr
 Encoding: UTF-8
 Language: en-US
-LazyData: true
-RoxygenNote: 7.1.1.9000
+RoxygenNote: 7.1.1.9001
 NeedsCompilation: no
-Packaged: 2020-11-27 13:28:47 UTC; gaborcsardi
+Packaged: 2021-04-01 20:19:00 UTC; gaborcsardi
 Author: Gábor Csárdi [cre, ctb],
   Jennifer Bryan [aut],
   Hadley Wickham [aut],
   RStudio [cph, fnd]
 Maintainer: Gábor Csárdi <csardi.gabor@gmail.com>
 Repository: CRAN
-Date/Publication: 2020-11-27 13:50:02 UTC
+Date/Publication: 2021-04-01 21:10:02 UTC
