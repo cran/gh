@@ -5,10 +5,8 @@ GraphQL
 JSON
 LastPass
 Minimalistic
-OAuth
 PATs
 URI
-Za
 api
 auth
 discoverable
@@ -17,7 +15,9 @@ gitcreds
 github
 https
 keyring
+macOS
 pre
+programmatically
 repo
 repos
 usethis

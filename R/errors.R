@@ -227,7 +227,7 @@ err <- local({
         if (is.na(max_msg_len)) max_msg_len <- 1000
         msg <- conditionMessage(cond)
         adv <- style_advice(
-          "\nType .Last.error.trace to see where the error occured"
+          "\nType .Last.error.trace to see where the error occurred"
         )
         dots <- "\033[0m\n[...]"
         if (bytes(msg) + bytes(adv) + bytes(dots) + 5L> max_msg_len) {
@@ -723,7 +723,7 @@ err <- local({
   }
 
   style_error <- function(x) {
-    if (has_cli()) cli::style_bold(cli::col_ed(x)) else x
+    if (has_cli()) cli::style_bold(cli::col_red(x)) else x
   }
 
   style_error_msg <- function(x) {
