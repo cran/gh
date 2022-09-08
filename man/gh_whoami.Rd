@@ -35,7 +35,9 @@ planned tasks. The \code{repo} scope, for example, is one many are likely to nee
 
 On macOS and Windows it is best to store the token in the git credential
 store, where most GitHub clients, including gh, can access it. You can
-use the gitcreds package to add your token to the credential store:\if{html}{\out{<div class="r">}}\preformatted{gitcreds::gitcreds_set()
+use the gitcreds package to add your token to the credential store:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{gitcreds::gitcreds_set()
 }\if{html}{\out{</div>}}
 
 See \url{https://gh.r-lib.org/articles/managing-personal-access-tokens.html}
@@ -53,7 +55,9 @@ gh_whoami()
 \dontshow{\}) # examplesIf}
 \dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 ## explicit token + use with GitHub Enterprise
-gh_whoami(.token = "8c70fd8419398999c9ac5bacf3192882193cadf2",
-          .api_url = "https://github.foobar.edu/api/v3")
+gh_whoami(
+  .token = "8c70fd8419398999c9ac5bacf3192882193cadf2",
+  .api_url = "https://github.foobar.edu/api/v3"
+)
 \dontshow{\}) # examplesIf}
 }

@@ -112,12 +112,12 @@ body, as JSON.
 \examples{
 \dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 ## Repositories of a user, these are equivalent
-gh("/users/hadley/repos")
-gh("/users/{username}/repos", username = "hadley")
+gh("/users/hadley/repos", .limit = 2)
+gh("/users/{username}/repos", username = "hadley", .limit = 2)
 
 ## Starred repositories of a user
-gh("/users/hadley/starred")
-gh("/users/{username}/starred", username = "hadley")
+gh("/users/hadley/starred", .limit = 2)
+gh("/users/{username}/starred", username = "hadley", .limit = 2)
 \dontshow{\}) # examplesIf}
 \dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 ## Create a repository, needs a token in GITHUB_PAT (or GITHUB_TOKEN)
@@ -161,11 +161,11 @@ gh("PATCH /repos/OWNER/REPO/issues/1", assignees = I(assignees))
 
 gh::gh(
   "POST /repos/{owner}/{repo}/pages",
-  owner = "gaborcsardi",
-  repo = "playground",
+  owner = "r-lib",
+  repo = "gh",
   source = list(
-    branch = jsonlite::unbox("master"),
-    path = jsonlite::unbox("/docs")
+    branch = jsonlite::unbox("gh-pages"),
+    path = jsonlite::unbox("/")
   ),
   .send_headers = c(Accept = "application/vnd.github.switcheroo-preview+json")
 )
@@ -173,11 +173,11 @@ gh::gh(
 ## The second way is to handle the JSON encoding manually, and supply it
 ## as a raw vector in an unnamed argument, and also a Content-Type header:
 
-body <- '{ "source": { "branch": "master", "path": "/docs" } }'
+body <- '{ "source": { "branch": "gh-pages", "path": "/" } }'
 gh::gh(
   "POST /repos/{owner}/{repo}/pages",
-  owner = "gaborcsardi",
-  repo = "playground",
+  owner = "r-lib",
+  repo = "gh",
   charToRaw(body),
   .send_headers = c(
     Accept = "application/vnd.github.switcheroo-preview+json",
