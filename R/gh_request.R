@@ -6,17 +6,33 @@ default_api_url <- function() {
 ## Headers to send with each API request
 default_send_headers <- c("User-Agent" = "https://github.com/r-lib/gh")
 
-gh_build_request <- function(endpoint = "/user", params = list(),
-                             token = NULL, destfile = NULL, overwrite = NULL,
-                             accept = NULL, send_headers = NULL,
-                             api_url = NULL, method = "GET") {
+gh_build_request <- function(endpoint = "/user",
+                             params = list(),
+                             token = NULL,
+                             destfile = NULL,
+                             overwrite = NULL,
+                             accept = NULL,
+                             send_headers = NULL,
+                             max_wait = 10,
+                             max_rate = NULL,
+                             api_url = NULL,
+                             method = "GET") {
   working <- list(
-    method = method, url = character(), headers = NULL,
-    query = NULL, body = NULL,
-    endpoint = endpoint, params = params,
-    token = token, accept = c(Accept = accept),
-    send_headers = send_headers, api_url = api_url,
-    dest = destfile, overwrite = overwrite
+    method = method,
+    url = character(),
+    headers = NULL,
+    query = NULL,
+    body = NULL,
+    endpoint = endpoint,
+    params = params,
+    token = token,
+    accept = c(Accept = accept),
+    send_headers = send_headers,
+    api_url = api_url,
+    dest = destfile,
+    overwrite = overwrite,
+    max_wait = max_wait,
+    max_rate = max_rate
   )
 
   working <- gh_set_verb(working)
@@ -25,13 +41,12 @@ gh_build_request <- function(endpoint = "/user", params = list(),
   working <- gh_set_body(working)
   working <- gh_set_url(working)
   working <- gh_set_headers(working)
-  working <- gh_set_dest(working)
-  working[c("method", "url", "headers", "query", "body", "dest")]
+  working[c("method", "url", "headers", "query", "body", "dest", "max_wait", "max_rate")]
 }
 
 
 ## gh_set_*(x)
-## x = a list in which we build up an httr request
+## x = a list in which we build up an httr2 request
 ## x goes in, x comes out, possibly modified
 
 gh_set_verb <- function(x) {
@@ -110,7 +125,7 @@ gh_set_body <- function(x) {
   if (length(x$params) == 1 && is.raw(x$params[[1]])) {
     x$body <- x$params[[1]]
   } else {
-    x$body <- toJSON(x$params, auto_unbox = TRUE)
+    x$body <- x$params
   }
   x
 }
@@ -180,16 +195,6 @@ gh_send_headers <- function(accept_header = NULL, headers = NULL) {
     modify_vector(default_send_headers, accept_header),
     headers
   )
-}
-
-#' @importFrom httr write_disk write_memory
-gh_set_dest <- function(x) {
-  if (is.null(x$dest)) {
-    x$dest <- write_memory()
-  } else {
-    x$dest <- write_disk(x$dest, overwrite = x$overwrite)
-  }
-  x
 }
 
 # helpers ----
