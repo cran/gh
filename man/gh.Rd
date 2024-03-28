@@ -8,6 +8,7 @@ gh(
   endpoint,
   ...,
   per_page = NULL,
+  .per_page = NULL,
   .token = NULL,
   .destfile = NULL,
   .overwrite = FALSE,
@@ -43,7 +44,7 @@ values are silently dropped. For GET requests, named \code{NA} values trigger an
 error. For other methods, named \code{NA} values are included in the body of the
 request, as JSON \code{null}.}
 
-\item{per_page}{Number of items to return per page. If omitted,
+\item{per_page, .per_page}{Number of items to return per page. If omitted,
 will be substituted by \code{max(.limit, 100)} if \code{.limit} is set,
 otherwise determined by the API (never greater than 100).}
 
@@ -54,10 +55,16 @@ for different GitHub Enterprise deployments.}
 
 \item{.destfile}{Path to write response to disk. If \code{NULL} (default),
 response will be processed and returned as an object. If path is given,
-response will be written to disk in the form sent.}
+response will be written to disk in the form sent. gh writes the
+response to a temporary file, and renames that file to \code{.destfile}
+after the request was successful. The name of the temporary file is
+created by adding a \verb{-<random>.gh-tmp} suffix to it, where \verb{<random>}
+is an ASCII string with random characters. gh removes the temporary
+file on error.}
 
 \item{.overwrite}{If \code{.destfile} is provided, whether to overwrite an
-existing file.  Defaults to \code{FALSE}.}
+existing file.  Defaults to \code{FALSE}. If an error happens the original
+file is kept.}
 
 \item{.api_url}{Github API url (default: \url{https://api.github.com}). Used
 if \code{endpoint} just contains a path. Defaults to \code{GITHUB_API_URL}
@@ -192,6 +199,16 @@ gh::gh(
     "Content-Type" = "application/json"
   )
 )
+\dontshow{\}) # examplesIf}
+\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+## Pass along a query to the search/code endpoint via the ... argument
+x <- gh::gh(
+            "/search/code",
+            q = "installation repo:r-lib/gh",
+            .send_headers = c("X-GitHub-Api-Version" = "2022-11-28")
+            )
+ str(x, list.len = 3, give.attr = FALSE)
+
 \dontshow{\}) # examplesIf}
 }
 \seealso{

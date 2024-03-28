@@ -26,14 +26,20 @@
 #'   values are silently dropped. For GET requests, named `NA` values trigger an
 #'   error. For other methods, named `NA` values are included in the body of the
 #'   request, as JSON `null`.
-#' @param per_page Number of items to return per page. If omitted,
+#' @param per_page,.per_page Number of items to return per page. If omitted,
 #'   will be substituted by `max(.limit, 100)` if `.limit` is set,
 #'   otherwise determined by the API (never greater than 100).
 #' @param .destfile Path to write response to disk. If `NULL` (default),
 #'   response will be processed and returned as an object. If path is given,
-#'   response will be written to disk in the form sent.
+#'   response will be written to disk in the form sent. gh writes the
+#'   response to a temporary file, and renames that file to `.destfile`
+#'   after the request was successful. The name of the temporary file is
+#'   created by adding a `-<random>.gh-tmp` suffix to it, where `<random>`
+#'   is an ASCII string with random characters. gh removes the temporary
+#'   file on error.
 #' @param .overwrite If `.destfile` is provided, whether to overwrite an
-#'   existing file.  Defaults to `FALSE`.
+#'   existing file.  Defaults to `FALSE`. If an error happens the original
+#'   file is kept.
 #' @param .token Authentication token. Defaults to `GITHUB_PAT` or
 #'   `GITHUB_TOKEN` environment variables, in this order if any is set.
 #'   See [gh_token()] if you need more flexibility, e.g. different tokens
@@ -144,9 +150,20 @@
 #'     "Content-Type" = "application/json"
 #'   )
 #' )
+#' @examplesIf FALSE
+#' ## Pass along a query to the search/code endpoint via the ... argument
+#' x <- gh::gh(
+#'             "/search/code",
+#'             q = "installation repo:r-lib/gh",
+#'             .send_headers = c("X-GitHub-Api-Version" = "2022-11-28")
+#'             )
+#'  str(x, list.len = 3, give.attr = FALSE)
+#'
+#'
 gh <- function(endpoint,
                ...,
                per_page = NULL,
+               .per_page = NULL,
                .token = NULL,
                .destfile = NULL,
                .overwrite = FALSE,
@@ -162,12 +179,12 @@ gh <- function(endpoint,
   params <- c(list(...), .params)
   params <- drop_named_nulls(params)
 
-  if (is.null(per_page)) {
-    if (!is.null(.limit)) {
-      per_page <- max(min(.limit, 100), 1)
-    }
-  }
 
+  check_exclusive(per_page, .per_page, .require = FALSE)
+  per_page <- per_page %||% .per_page
+  if (is.null(per_page) && !is.null(.limit)) {
+    per_page <- max(min(.limit, 100), 1)
+  }
   if (!is.null(per_page)) {
     params <- c(params, list(per_page = per_page))
   }
@@ -188,15 +205,20 @@ gh <- function(endpoint,
 
   if (req$method == "GET") check_named_nas(params)
 
-  if (.progress) prbr <- make_progress_bar(req)
-
   raw <- gh_make_request(req)
   res <- gh_process_response(raw, req)
   len <- gh_response_length(res)
 
+  if (.progress && !is.null(.limit)) {
+    pages <- min(gh_extract_pages(res), ceiling(.limit / per_page))
+    cli::cli_progress_bar("Running gh query", total = pages)
+    cli::cli_progress_update() # already done one
+  }
+
   while (!is.null(.limit) && len < .limit && gh_has_next(res)) {
-    if (.progress) update_progress_bar(prbr, res)
     res2 <- gh_next(res)
+    len <- len + gh_response_length(res2)
+    if (.progress) cli::cli_progress_update()
 
     if (!is.null(names(res2)) && identical(names(res), names(res2))) {
       res3 <- mapply( # Handle named array case
@@ -218,11 +240,11 @@ gh <- function(endpoint,
       res3 <- c(res, res2) # e.g. GET /orgs/:org/invitations
     }
 
-    len <- len + gh_response_length(res2)
-
     attributes(res3) <- attributes(res2)
     res <- res3
   }
+
+  if (.progress) cli::cli_progress_done()
 
   # We only subset for a non-named response.
   if (!is.null(.limit) && len > .limit &&
@@ -283,19 +305,20 @@ gh_make_request <- function(x, error_call = caller_env()) {
   # allow custom handling with gh_error
   req <- httr2::req_error(req, is_error = function(resp) FALSE)
 
-  resp <- httr2::req_perform(req, path = x$dest)
+  resp <- httr2::req_perform(req, path = x$desttmp)
   if (httr2::resp_status(resp) >= 300) {
-    gh_error(resp, error_call = error_call)
+    gh_error(resp, gh_req = x, error_call = error_call)
   }
 
   resp
 }
 
 # https://docs.github.com/v3/#client-errors
-gh_error <- function(response, error_call = caller_env()) {
+gh_error <- function(response, gh_req, error_call = caller_env()) {
   heads <- httr2::resp_headers(response)
   res <- httr2::resp_body_json(response)
   status <- httr2::resp_status(response)
+  if (!is.null(gh_req$desttmp)) unlink(gh_req$desttmp)
 
   msg <- "GitHub API error ({status}): {heads$status %||% ''} {res$message}"
 

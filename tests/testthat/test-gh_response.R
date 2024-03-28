@@ -49,6 +49,7 @@ test_that("can download files", {
 })
 
 test_that("warns if output is HTML", {
+  skip_on_cran()
   expect_snapshot(res <- gh("POST /markdown", text = "foo"))
 
   expect_equal(res, list(message = "<p>foo</p>\n"), ignore_attr = TRUE)
@@ -56,14 +57,29 @@ test_that("warns if output is HTML", {
 })
 
 test_that("captures details to recreate request", {
+  skip_on_cran()
   res <- gh("/orgs/{org}/repos", org = "r-lib", .per_page = 1)
 
   req <- attr(res, "request")
   expect_type(req, "list")
   expect_equal(req$url, "https://api.github.com/orgs/r-lib/repos")
-  expect_equal(req$query, list(.per_page = 1))
+  expect_equal(req$query, list(per_page = 1))
 
   # For backwards compatibility
   expect_equal(attr(res, "method"), "GET")
   expect_type(attr(res, ".send_headers"), "list")
+})
+
+test_that("output file is not overwritten on error", {
+  tmp <- withr::local_tempfile()
+  writeLines("foo", tmp)
+
+  err <- tryCatch(
+    gh("/repos", .destfile = tmp),
+    error = function(e) e
+  )
+
+  expect_true(file.exists(tmp))
+  expect_equal(readLines(tmp), "foo")
+  expect_true(!is.null((err$response_content)))
 })
