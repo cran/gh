@@ -6,19 +6,19 @@
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/r-lib/gh/workflows/R-CMD-check/badge.svg)](https://github.com/r-lib/gh/actions)
-[![Codecov test
-coverage](https://codecov.io/gh/r-lib/gh/branch/main/graph/badge.svg)](https://app.codecov.io/gh/r-lib/gh?branch=main)
 [![](https://www.r-pkg.org/badges/version/gh)](https://www.r-pkg.org/pkg/gh)
 [![CRAN Posit mirror
 downloads](https://cranlogs.r-pkg.org/badges/gh)](https://www.r-pkg.org/pkg/gh)
 [![R-CMD-check](https://github.com/r-lib/gh/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-lib/gh/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/r-lib/gh/graph/badge.svg)](https://app.codecov.io/gh/r-lib/gh)
 <!-- badges: end -->
 
 Minimalistic client to access GitHub’s
 [REST](https://docs.github.com/rest) and
 [GraphQL](https://docs.github.com/graphql) APIs.
 
-## Installation
+## Installation and setup
 
 Install the package from CRAN as usual:
 
@@ -31,6 +31,22 @@ Install the development version from GitHub:
 ``` r
 pak::pak("r-lib/gh")
 ```
+
+### Authentication
+
+The value returned by `gh::gh_token()` is used as Personal Access Token
+(PAT). A token is needed for some requests, and to help with rate
+limiting. gh can use your regular git credentials in the git credential
+store, via the gitcreds package. Use `gitcreds::gitcreds_set()` to put a
+PAT into the git credential store. If you cannot use the credential
+store, set the `GITHUB_PAT` environment variable to your PAT. See the
+details in the `?gh::gh_token` manual page and the manual of the
+gitcreds package.
+
+### API URL
+
+-   The `GITHUB_API_URL` environment variable, if set, is used for the
+    default github api url.
 
 ## Usage
 
@@ -53,16 +69,16 @@ call. E.g.
 ``` r
 my_repos <- gh("GET /users/{username}/repos", username = "gaborcsardi")
 vapply(my_repos, "[[", "", "name")
-#>  [1] "after"                "alexr"                "all.primer.tutorials"
-#>  [4] "altlist"              "argufy"               "ask"                 
-#>  [7] "async"                "BCEA"                 "BH"                  
-#> [10] "brokenPackage"        "butcher"              "css"                 
-#> [13] "curl"                 "disposables"          "dotenv"              
-#> [16] "falsy"                "finmix"               "foobar"              
-#> [19] "franc"                "fswatch"              "guildai-r"           
-#> [22] "httpgd"               "installgithub.app"    "ISA"                 
-#> [25] "isa2"                 "josaplay"             "keynote"             
-#> [28] "keypress"             "log"                  "lpSolve"
+#>  [1] "after"                "alda"                 "alexr"               
+#>  [4] "all.primer.tutorials" "altlist"              "anticlust"           
+#>  [7] "argufy"               "ask"                  "async"               
+#> [10] "autobrew-bundler"     "available-work"       "baguette"            
+#> [13] "BCEA"                 "BH"                   "bigrquerystorage"    
+#> [16] "brew-big-sur"         "brokenPackage"        "brulee"              
+#> [19] "build-r-app"          "butcher"              "censored"            
+#> [22] "cf-tunnel"            "checkinstall"         "cli"                 
+#> [25] "clock"                "comments"             "covr"                
+#> [28] "covrlabs"             "cran-metadata"        "csg"
 ```
 
 The JSON result sent by the API is converted to an R object.
@@ -75,16 +91,14 @@ my_repos <- gh(
   username = "gaborcsardi",
   sort = "created")
 vapply(my_repos, "[[", "", "name")
-#>  [1] "isa2"                   "r-builds"               "sos"                   
-#>  [4] "SCAVENGE"               "rworkflows"             "r-bugs"                
-#>  [7] "josaplay"               "all.primer.tutorials"   "neartools"             
-#> [10] "REDCapTidieR"           "guildai-r"              "BH"                    
-#> [13] "testrtools"             "vt-rs"                  "testpaktestthat"       
-#> [16] "httpgd"                 "BCEA"                   "monorepo"              
-#> [19] "pacman"                 "tiff"                   "tidyclust"             
-#> [22] "testCheckForceSuggests" "naomi"                  "rstudio"               
-#> [25] "butcher"                "foobar"                 "roxydemo"              
-#> [28] "log"                    "rtools-packages"        "r-builds-original"
+#>  [1] "phantomjs"       "FSA"             "greta"           "webdriver"      
+#>  [5] "clock"           "testthat"        "jsonlite"        "duckdb"         
+#>  [9] "duckdb-r"        "httpuv"          "unwind"          "httr2"          
+#> [13] "pins-r"          "install-figlet"  "weird-package"   "anticlust"      
+#> [17] "nanoparquet-cli" "cf-tunnel"       "myweek"          "figlet"         
+#> [21] "evercran"        "available-work"  "r-shell"         "Rcpp"           
+#> [25] "openssl"         "openbsd-vm"      "cran-metadata"   "run-r-app"      
+#> [29] "build-r-app"     "comments"
 ```
 
 ### POST, PATCH, PUT and DELETE requests
@@ -116,20 +130,21 @@ Supply the `page` parameter to get subsequent pages:
 ``` r
 my_repos2 <- gh("GET /orgs/{org}/repos", org = "r-lib", page = 2)
 vapply(my_repos2, "[[", "", "name")
-#>  [1] "sodium"      "gargle"      "remotes"     "jose"        "backports"  
-#>  [6] "rcmdcheck"   "vdiffr"      "callr"       "mockery"     "here"       
-#> [11] "revdepcheck" "processx"    "vctrs"       "debugme"     "usethis"    
-#> [16] "rlang"       "pkgload"     "httrmock"    "pkgbuild"    "prettycode" 
-#> [21] "roxygen2md"  "pkgapi"      "zeallot"     "liteq"       "keyring"    
-#> [26] "sloop"       "styler"      "ansistrings" "archive"     "later"
+#>  [1] "desc"        "profvis"     "sodium"      "gargle"      "remotes"    
+#>  [6] "jose"        "backports"   "rcmdcheck"   "vdiffr"      "callr"      
+#> [11] "mockery"     "here"        "revdepcheck" "processx"    "vctrs"      
+#> [16] "debugme"     "usethis"     "rlang"       "pkgload"     "httrmock"   
+#> [21] "pkgbuild"    "prettycode"  "roxygen2md"  "pkgapi"      "zeallot"    
+#> [26] "liteq"       "keyring"     "sloop"       "styler"      "ansistrings"
 ```
 
 ## Environment Variables
 
-- The `GITHUB_API_URL` environment variable is used for the default
-  github api url.
-- One of `GITHUB_PAT` or `GITHUB_TOKEN` environment variables is used,
-  in this order, as default token.
+-   The `GITHUB_API_URL` environment variable is used for the default
+    github api url.
+-   The `GITHUB_PAT` and `GITHUB_TOKEN` environment variables are used,
+    if set, in this order, as default token. Consider using the git
+    credential store instead, see `?gh::gh_token`.
 
 ## Code of Conduct
 

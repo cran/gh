@@ -1,5 +1,3 @@
-
-
 trim_ws <- function(x) {
   sub("\\s*$", "", sub("^\\s*", "", x))
 }
@@ -74,6 +72,11 @@ drop_named_nulls <- function(x) {
   named <- has_name(x)
   null <- vapply(x, is.null, logical(1))
   cleanse_names(x[!named | !null])
+}
+
+.parse_params <- function(..., .params = list()) {
+  params <- c(list2(...), .params)
+  drop_named_nulls(params)
 }
 
 check_named_nas <- function(x) {

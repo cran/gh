@@ -55,11 +55,28 @@ test_that("fall back to GITHUB_PAT, then GITHUB_TOKEN", {
   })
 })
 
+test_that("gh_token_exists works as expected", {
+  withr::local_envvar(GITHUB_API_URL = "https://test.com")
+
+  withr::local_envvar(GITHUB_PAT_TEST_COM = NA)
+  expect_false(gh_token_exists())
+
+  withr::local_envvar(GITHUB_PAT_TEST_COM = gh_pat(strrep("0", 40)))
+  expect_true(gh_token_exists())
+
+  withr::local_envvar(GITHUB_PAT_TEST_COM = "invalid")
+  expect_false(gh_token_exists())
+})
+
 # gh_pat class ----
 test_that("validate_gh_pat() rejects bad characters, wrong # of characters", {
   # older PATs
   expect_error(gh_pat(strrep("a", 40)), NA)
-  expect_error(gh_pat(strrep("g", 40)), "40 hexadecimal digits", class = "error")
+  expect_error(
+    gh_pat(strrep("g", 40)),
+    "40 hexadecimal digits",
+    class = "error"
+  )
   expect_error(gh_pat("aa"), "40 hexadecimal digits", class = "error")
 
   # newer PATs
@@ -67,8 +84,16 @@ test_that("validate_gh_pat() rejects bad characters, wrong # of characters", {
   expect_error(gh_pat(paste0("ghp_", strrep("3", 251))), NA)
   expect_error(gh_pat(paste0("github_pat_", strrep("A", 36))), NA)
   expect_error(gh_pat(paste0("github_pat_", strrep("3", 244))), NA)
-  expect_error(gh_pat(paste0("ghJ_", strrep("a", 36))), "prefix", class = "error")
-  expect_error(gh_pat(paste0("github_pa_", strrep("B", 244))), "github_pat_", class = "error")
+  expect_error(
+    gh_pat(paste0("ghJ_", strrep("a", 36))),
+    "prefix",
+    class = "error"
+  )
+  expect_error(
+    gh_pat(paste0("github_pa_", strrep("B", 244))),
+    "github_pat_",
+    class = "error"
+  )
 })
 
 test_that("format.gh_pat() and str.gh_pat() hide the middle stuff", {
@@ -88,8 +113,10 @@ test_that("format.gh_pat() handles empty string", {
 
 # URL processing helpers ----
 test_that("get_baseurl() insists on http(s)", {
-  expect_error(get_baseurl("github.com"), "protocols")
-  expect_error(get_baseurl("github.acme.com"), "protocols")
+  expect_snapshot(error = TRUE, {
+    get_baseurl("github.com")
+    get_baseurl("github.acme.com")
+  })
 })
 
 test_that("get_baseurl() works", {
@@ -149,4 +176,12 @@ test_that("get_apiurl() works", {
   expect_equal(get_apiurl("https://github.acme.com"), x)
   expect_equal(get_apiurl("https://github.acme.com/OWNER/REPO"), x)
   expect_equal(get_apiurl("https://github.acme.com/api/v3"), x)
+})
+
+test_that("tokens can be requested from a Connect server", {
+  skip_if_not_installed("connectcreds")
+
+  token <- strrep("a", 40)
+  connectcreds::local_mocked_connect_responses(token = token)
+  expect_equal(gh_token(), gh_pat(token))
 })

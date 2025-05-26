@@ -11,7 +11,11 @@ test_that("works with empty bodies", {
 test_that("works with empty bodies from DELETE", {
   skip_if_no_github(has_scope = "gist")
 
-  out <- gh("POST /gists", files = list(x = list(content = "y")), public = FALSE)
+  out <- gh(
+    "POST /gists",
+    files = list(x = list(content = "y")),
+    public = FALSE
+  )
   out <- gh("DELETE /gists/{gist_id}", gist_id = out$id)
   expect_equal(out, list(), ignore_attr = TRUE)
 })
@@ -64,10 +68,6 @@ test_that("captures details to recreate request", {
   expect_type(req, "list")
   expect_equal(req$url, "https://api.github.com/orgs/r-lib/repos")
   expect_equal(req$query, list(per_page = 1))
-
-  # For backwards compatibility
-  expect_equal(attr(res, "method"), "GET")
-  expect_type(attr(res, ".send_headers"), "list")
 })
 
 test_that("output file is not overwritten on error", {

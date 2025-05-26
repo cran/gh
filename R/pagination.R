@@ -1,4 +1,3 @@
-
 extract_link <- function(gh_response, link) {
   headers <- attr(gh_response, "response")
   links <- headers$link
@@ -33,22 +32,22 @@ gh_has_next <- function(gh_response) {
   gh_has(gh_response, "next")
 }
 
-gh_link_request <- function(gh_response, link) {
+gh_link_request <- function(gh_response, link, .token, .send_headers) {
   stopifnot(inherits(gh_response, "gh_response"))
 
   url <- extract_link(gh_response, link)
   if (is.na(url)) cli::cli_abort("No {link} page")
 
   req <- attr(gh_response, "request")
-  purl <- httr2::url_parse(url)
-  req$query <- purl$query
-  purl$query <- NULL
-  req$url <- httr2::url_build(purl)
+  req$url <- url
+  req$token <- .token
+  req$send_headers <- .send_headers
+  req <- gh_set_headers(req)
   req
 }
 
-gh_link <- function(gh_response, link) {
-  req <- gh_link_request(gh_response, link)
+gh_link <- function(gh_response, link, .token, .send_headers) {
+  req <- gh_link_request(gh_response, link, .token, .send_headers)
   raw <- gh_make_request(req)
   gh_process_response(raw, req)
 }
@@ -57,6 +56,8 @@ gh_extract_pages <- function(gh_response) {
   last <- extract_link(gh_response, "last")
   if (!is.na(last)) {
     as.integer(httr2::url_parse(last)$query$page)
+  } else {
+    NA
   }
 }
 
@@ -71,6 +72,7 @@ gh_extract_pages <- function(gh_response) {
 #' If the requested page does not exist, an error is thrown.
 #'
 #' @param gh_response An object returned by a [gh()] call.
+#' @inheritParams gh
 #' @return Answer from the API.
 #'
 #' @seealso The `.limit` argument to [gh()] supports fetching more than
@@ -83,19 +85,27 @@ gh_extract_pages <- function(gh_response) {
 #' vapply(x, "[[", character(1), "login")
 #' x2 <- gh_next(x)
 #' vapply(x2, "[[", character(1), "login")
-gh_next <- function(gh_response) gh_link(gh_response, "next")
+gh_next <- function(gh_response, .token = NULL, .send_headers = NULL) {
+  gh_link(gh_response, "next", .token = .token, .send_headers = .send_headers)
+}
 
 #' @name gh_next
 #' @export
 
-gh_prev <- function(gh_response) gh_link(gh_response, "prev")
+gh_prev <- function(gh_response, .token = NULL, .send_headers = NULL) {
+  gh_link(gh_response, "prev", .token = .token, .send_headers = .send_headers)
+}
 
 #' @name gh_next
 #' @export
 
-gh_first <- function(gh_response) gh_link(gh_response, "first")
+gh_first <- function(gh_response, .token = NULL, .send_headers = NULL) {
+  gh_link(gh_response, "first", .token = .token, .send_headers = .send_headers)
+}
 
 #' @name gh_next
 #' @export
 
-gh_last <- function(gh_response) gh_link(gh_response, "last")
+gh_last <- function(gh_response, .token = NULL, .send_headers = NULL) {
+  gh_link(gh_response, "last", .token = .token, .send_headers = .send_headers)
+}

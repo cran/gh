@@ -6,7 +6,7 @@ gh_process_response <- function(resp, gh_req) {
 
   is_raw <- identical(content_type, "application/octet-stream") ||
     isTRUE(grepl("param=raw$", gh_media_type, ignore.case = TRUE))
-  is_ondisk <- inherits(resp$body, "httr2_path")
+  is_ondisk <- inherits(resp$body, "httr2_path") && !is.null(gh_req$dest)
   is_empty <- length(resp$body) == 0
 
   if (is_ondisk) {
@@ -27,11 +27,7 @@ gh_process_response <- function(resp, gh_req) {
   }
 
   attr(res, "response") <- httr2::resp_headers(resp)
-  attr(res, "request") <- gh_req
-
-  # for backward compatibility
-  attr(res, "method") <- resp$method
-  attr(res, ".send_headers") <- httr2::last_request()$headers
+  attr(res, "request") <- remove_headers(gh_req)
 
   if (is_ondisk) {
     class(res) <- c("gh_response", "path")
@@ -41,4 +37,8 @@ gh_process_response <- function(resp, gh_req) {
     class(res) <- c("gh_response", "list")
   }
   res
+}
+
+remove_headers <- function(x) {
+  x[names(x) != "headers"]
 }

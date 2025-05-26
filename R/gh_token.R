@@ -8,7 +8,8 @@
 #' want a PAT.
 #'
 #' gh calls [gitcreds::gitcreds_get()] with the `api_url`, which checks session
-#' environment variables and then the local Git credential store for a PAT
+#' environment variables (`GITHUB_PAT`, `GITHUB_TOKEN`)
+#' and then the local Git credential store for a PAT
 #' appropriate to the `api_url`. Therefore, if you have previously used a PAT
 #' with, e.g., command line Git, gh may retrieve and re-use it. You can call
 #' [gitcreds::gitcreds_get()] directly, yourself, if you want to see what is
@@ -45,11 +46,25 @@
 gh_token <- function(api_url = NULL) {
   api_url <- api_url %||% default_api_url()
   stopifnot(is.character(api_url), length(api_url) == 1)
+  host_url <- get_hosturl(api_url)
+  # Check for credentials supplied by Posit Connect.
+  if (is_installed("connectcreds")) {
+    if (connectcreds::has_viewer_token(host_url)) {
+      token <- connectcreds::connect_viewer_token(host_url)
+      return(gh_pat(token$access_token))
+    }
+  }
   token <- tryCatch(
-    gitcreds::gitcreds_get(get_hosturl(api_url)),
+    gitcreds::gitcreds_get(host_url),
     error = function(e) NULL
   )
   gh_pat(token$password %||% "")
+}
+
+#' @export
+#' @rdname gh_token
+gh_token_exists <- function(api_url = NULL) {
+  tryCatch(nzchar(gh_token(api_url)), error = function(e) FALSE)
 }
 
 gh_auth <- function(token) {
@@ -75,12 +90,17 @@ new_gh_pat <- function(x) {
 # validates PAT only in a very narrow, technical, and local sense
 validate_gh_pat <- function(x) {
   stopifnot(inherits(x, "gh_pat"))
-  if (x == "" ||
-    # https://github.blog/changelog/2021-03-04-authentication-token-format-updates/
-    # Fine grained tokens start with "github_pat_".
-    # https://github.blog/changelog/2022-10-18-introducing-fine-grained-personal-access-tokens/
-    grepl("^(gh[pousr]_[A-Za-z0-9_]{36,251}|github_pat_[A-Za-z0-9_]{36,244})$", x) ||
-    grepl("^[[:xdigit:]]{40}$", x)) {
+  if (
+    x == "" ||
+      # https://github.blog/changelog/2021-03-04-authentication-token-format-updates/
+      # Fine grained tokens start with "github_pat_".
+      # https://github.blog/changelog/2022-10-18-introducing-fine-grained-personal-access-tokens/
+      grepl(
+        "^(gh[pousr]_[A-Za-z0-9_]{36,251}|github_pat_[A-Za-z0-9_]{36,244})$",
+        x
+      ) ||
+      grepl("^[[:xdigit:]]{40}$", x)
+  ) {
     x
   } else {
     url <- "https://gh.r-lib.org/articles/managing-personal-access-tokens.html"

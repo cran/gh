@@ -40,10 +40,7 @@
 #' @param .overwrite If `.destfile` is provided, whether to overwrite an
 #'   existing file.  Defaults to `FALSE`. If an error happens the original
 #'   file is kept.
-#' @param .token Authentication token. Defaults to `GITHUB_PAT` or
-#'   `GITHUB_TOKEN` environment variables, in this order if any is set.
-#'   See [gh_token()] if you need more flexibility, e.g. different tokens
-#'   for different GitHub Enterprise deployments.
+#' @param .token Authentication token. Defaults to [gh_token()].
 #' @param .api_url Github API url (default: <https://api.github.com>). Used
 #'   if `endpoint` just contains a path. Defaults to `GITHUB_API_URL`
 #'   environment variable if set.
@@ -91,8 +88,7 @@
 #' gh("/users/hadley/starred", .limit = 2)
 #' gh("/users/{username}/starred", username = "hadley", .limit = 2)
 #' @examplesIf FALSE
-#' ## Create a repository, needs a token in GITHUB_PAT (or GITHUB_TOKEN)
-#' ## environment variable
+#' ## Create a repository, needs a token (see gh_token())
 #' gh("POST /user/repos", name = "foobar")
 #' @examplesIf identical(Sys.getenv("IN_PKGDOWN"), "true")
 #' ## Issues of a repository
@@ -160,25 +156,25 @@
 #'  str(x, list.len = 3, give.attr = FALSE)
 #'
 #'
-gh <- function(endpoint,
-               ...,
-               per_page = NULL,
-               .per_page = NULL,
-               .token = NULL,
-               .destfile = NULL,
-               .overwrite = FALSE,
-               .api_url = NULL,
-               .method = "GET",
-               .limit = NULL,
-               .accept = "application/vnd.github.v3+json",
-               .send_headers = NULL,
-               .progress = TRUE,
-               .params = list(),
-               .max_wait = 600,
-               .max_rate = NULL) {
-  params <- c(list(...), .params)
-  params <- drop_named_nulls(params)
-
+gh <- function(
+  endpoint,
+  ...,
+  per_page = NULL,
+  .per_page = NULL,
+  .token = NULL,
+  .destfile = NULL,
+  .overwrite = FALSE,
+  .api_url = NULL,
+  .method = "GET",
+  .limit = NULL,
+  .accept = "application/vnd.github.v3+json",
+  .send_headers = NULL,
+  .progress = TRUE,
+  .params = list(),
+  .max_wait = 600,
+  .max_rate = NULL
+) {
+  params <- .parse_params(..., .params = .params)
 
   check_exclusive(per_page, .per_page, .require = FALSE)
   per_page <- per_page %||% .per_page
@@ -216,13 +212,15 @@ gh <- function(endpoint,
   }
 
   while (!is.null(.limit) && len < .limit && gh_has_next(res)) {
-    res2 <- gh_next(res)
+    res2 <- gh_next(res, .token = .token, .send_headers = .send_headers)
     len <- len + gh_response_length(res2)
     if (.progress) cli::cli_progress_update()
 
     if (!is.null(names(res2)) && identical(names(res), names(res2))) {
-      res3 <- mapply( # Handle named array case
-        function(x, y, n) { # e.g. GET /search/repositories
+      res3 <- mapply(
+        # Handle named array case
+        function(x, y, n) {
+          # e.g. GET /search/repositories
           z <- c(x, y)
           atm <- is.atomic(z)
           if (atm && n %in% c("total_count", "incomplete_results")) {
@@ -233,10 +231,13 @@ gh <- function(endpoint,
             z
           }
         },
-        res, res2, names(res),
+        res,
+        res2,
+        names(res),
         SIMPLIFY = FALSE
       )
-    } else { # Handle unnamed array case
+    } else {
+      # Handle unnamed array case
       res3 <- c(res, res2) # e.g. GET /orgs/:org/invitations
     }
 
@@ -247,8 +248,12 @@ gh <- function(endpoint,
   if (.progress) cli::cli_progress_done()
 
   # We only subset for a non-named response.
-  if (!is.null(.limit) && len > .limit &&
-    !"total_count" %in% names(res) && length(res) == len) {
+  if (
+    !is.null(.limit) &&
+      len > .limit &&
+      !"total_count" %in% names(res) &&
+      length(res) == len
+  ) {
     res_attr <- attributes(res)
     res <- res[seq_len(.limit)]
     attributes(res) <- res_attr
@@ -258,8 +263,9 @@ gh <- function(endpoint,
 }
 
 gh_response_length <- function(res) {
-  if (!is.null(names(res)) && length(res) > 1 &&
-    names(res)[1] == "total_count") {
+  if (
+    !is.null(names(res)) && length(res) > 1 && names(res)[1] == "total_count"
+  ) {
     # Ignore total_count, incomplete_results, repository_selection
     # and take the first list element to get the length
     lst <- vapply(res, is.list, logical(1))
@@ -282,12 +288,29 @@ gh_make_request <- function(x, error_call = caller_env()) {
   req <- httr2::request(x$url)
   req <- httr2::req_method(req, x$method)
   req <- httr2::req_url_query(req, !!!x$query)
-  if (is.raw(x$body)) {
-    req <- httr2::req_body_raw(req, x$body)
-  } else {
-    req <- httr2::req_body_json(req, x$body, null = "list", digits = 4)
+
+  if (!is.null((x$body))) {
+    if (is.raw(x$body)) {
+      req <- httr2::req_body_raw(req, x$body)
+    } else {
+      req <- httr2::req_body_json(req, x$body, null = "list", digits = 4)
+    }
   }
   req <- httr2::req_headers(req, !!!x$headers)
+
+  # Reduce connection timeout from curl's 10s default to 5s
+  req <- httr2::req_options(req, connecttimeout_ms = 5000)
+  if (Sys.getenv("GH_FORCE_HTTP_1_1") == "true") {
+    req <- httr2::req_options(req, http_version = 2)
+  }
+
+  if (!isFALSE(getOption("gh_cache"))) {
+    req <- httr2::req_cache(
+      req,
+      max_size = 100 * 1024 * 1024, # 100 MB
+      path = tools::R_user_dir("gh", "cache")
+    )
+  }
 
   if (!is_testing()) {
     req <- httr2::req_retry(
@@ -306,7 +329,7 @@ gh_make_request <- function(x, error_call = caller_env()) {
   req <- httr2::req_error(req, is_error = function(resp) FALSE)
 
   resp <- httr2::req_perform(req, path = x$desttmp)
-  if (httr2::resp_status(resp) >= 300) {
+  if (httr2::resp_status(resp) >= 400) {
     gh_error(resp, gh_req = x, error_call = error_call)
   }
 
