@@ -1,5 +1,6 @@
 CMD
 Codecov
+ETag
 Github
 GraphQL
 JSON
@@ -22,4 +23,6 @@ macOS
 pre
 programmatically
 repo
+revalidates
 usethis
+webfakes

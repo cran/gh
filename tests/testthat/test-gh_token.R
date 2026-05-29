@@ -56,6 +56,7 @@ test_that("fall back to GITHUB_PAT, then GITHUB_TOKEN", {
 })
 
 test_that("gh_token_exists works as expected", {
+  withr::local_options(gh_validate_tokens = "error")
   withr::local_envvar(GITHUB_API_URL = "https://test.com")
 
   withr::local_envvar(GITHUB_PAT_TEST_COM = NA)
@@ -70,6 +71,8 @@ test_that("gh_token_exists works as expected", {
 
 # gh_pat class ----
 test_that("validate_gh_pat() rejects bad characters, wrong # of characters", {
+  withr::local_options(gh_validate_tokens = "error")
+
   # older PATs
   expect_error(gh_pat(strrep("a", 40)), NA)
   expect_error(
@@ -96,6 +99,55 @@ test_that("validate_gh_pat() rejects bad characters, wrong # of characters", {
   )
 })
 
+test_that("validate_gh_pat() honors gh_validate_tokens option and env var", {
+  bad <- "definitely-not-a-pat"
+
+  # Default is "warn": warns but still returns the value. Reset the
+  # session-wide warning throttle so the expected warning isn't suppressed
+  # by an earlier firing.
+  withr::local_options(gh_validate_tokens = NULL)
+  withr::local_envvar(GH_VALIDATE_TOKENS = NA)
+  rlang::reset_warning_verbosity("gh_invalid_pat")
+  expect_warning(out <- gh_pat(bad), "Invalid GitHub PAT format")
+  expect_s3_class(out, "gh_pat")
+  expect_equal(unclass(out), bad)
+
+  # "off" skips validation, no message of any kind.
+  withr::local_options(gh_validate_tokens = "off")
+  expect_silent(out <- gh_pat(bad))
+  expect_equal(unclass(out), bad)
+
+  # "error" aborts (current pre-default behavior).
+  withr::local_options(gh_validate_tokens = "error")
+  expect_error(gh_pat(bad), "Invalid GitHub PAT format")
+
+  # Env var is honored when option is unset.
+  withr::local_options(gh_validate_tokens = NULL)
+  withr::local_envvar(GH_VALIDATE_TOKENS = "error")
+  expect_error(gh_pat(bad), "Invalid GitHub PAT format")
+
+  # Option takes precedence over env var (env var still "error" from above).
+  withr::local_options(gh_validate_tokens = "off")
+  expect_silent(gh_pat(bad))
+
+  # Unknown mode errors loudly.
+  withr::local_options(gh_validate_tokens = "bogus")
+  expect_error(gh_pat(bad), "Invalid token validation mode")
+})
+
+test_that("get_validate_tokens_mode() rejects a setting that isn't a single string", {
+  bad <- "definitely-not-a-pat"
+
+  withr::local_options(gh_validate_tokens = c("warn", "error"))
+  expect_snapshot(error = TRUE, gh_pat(bad))
+
+  withr::local_options(gh_validate_tokens = 42L)
+  expect_snapshot(error = TRUE, gh_pat(bad))
+
+  withr::local_options(gh_validate_tokens = NA_character_)
+  expect_snapshot(error = TRUE, gh_pat(bad))
+})
+
 test_that("format.gh_pat() and str.gh_pat() hide the middle stuff", {
   pat <- paste0(strrep("a", 10), strrep("4", 20), strrep("F", 10))
   expect_match(format(gh_pat(pat)), "[a-zA-Z]+")
@@ -109,6 +161,28 @@ test_that("str.gh_pat() indicates it's a `gh_pat`", {
 
 test_that("format.gh_pat() handles empty string", {
   expect_match(format(gh_pat("")), "<no PAT>")
+})
+
+test_that("print.gh_pat prints the obfuscated format", {
+  pat <- gh_pat(paste0("ghp_", strrep("A", 36)))
+  expect_output(print(pat), "ghp_.*\\.\\.\\.")
+})
+
+test_that("new_gh_pat rejects non-string input", {
+  expect_snapshot(error = TRUE, new_gh_pat(1L))
+  expect_snapshot(error = TRUE, new_gh_pat(c("a", "b")))
+})
+
+test_that("validate_gh_pat rejects non-gh_pat input", {
+  expect_snapshot(error = TRUE, validate_gh_pat("not-a-pat-object"))
+})
+
+test_that("gh_auth warns on token containing whitespace", {
+  expect_warning(
+    out <- gh_auth("token with space"),
+    "whitespace"
+  )
+  expect_equal(unname(out), "token token with space")
 })
 
 # URL processing helpers ----

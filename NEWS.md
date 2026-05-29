@@ -1,3 +1,40 @@
+# gh 1.6.0
+
+* `gh()` now signals a classed `gh_interrupt` interrupt when a paginated
+  call is interrupted (e.g. via `Ctrl+C` / `Escape`). The condition object
+  carries the records fetched so far on its `$gh_result` field. If the
+  interrupt is not caught, then you can also access it via
+  `rlang::last_error()`, i.e. the partial results are in
+  `rlang::last_error()$gh_result` (#98).
+
+* GitHub PAT format validation now issues a warning by default instead of
+  throwing an error, so a PAT in an unrecognized (e.g. newly introduced)
+  format is still used. Set the `gh_validate_tokens` option or the
+  `GH_VALIDATE_TOKENS` environment to `"off"`, `"warn"` or `"error"`
+  to configure this.
+
+* Token validation now recognizes newer GitHub App installation tokens
+  (`ghs_` prefix) (#231, @jharmon-gilead).
+
+* `gh()` no longer returns empty results when httr2's HTTP cache
+  revalidates a stored response with `304 Not Modified`.
+
+* `gh()` no longer errors on a `304 Not Modified` response. This makes
+  manual conditional requests (e.g. passing `If-None-Match` via
+  `.send_headers`) usable: a 304 returns an empty `gh_response` with the
+  response headers (including the `ETag`) still attached (#219).
+
+* New `fake_github_app()`, a webfakes app that implements a small subset
+  of the GitHub REST API. This app is now used in the gh test suite, and
+  it can be used by upstream package authors as well.
+
+* Token validation now recognizes newer GitHub App installation tokens
+  (`ghs_` prefix) (#231, @jharmon-gilead).
+
+* `gh()` no longer crashes when reporting a GitHub API error whose
+  `errors` field is a plain string rather than the documented array of
+  objects, as happens on some 422 responses (#229).
+
 # gh 1.5.0
 
 ## BREAKING CHANGES
@@ -99,7 +136,7 @@
 
 * The documentation for the GitHub REST API has moved to
   <https://docs.github.com/rest> and endpoints are now documented using
-  the URI template style of [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570):
+  the URI template style of [RFC 6570](https://datatracker.ietf.org/doc/html/rfc6570):
   - Old: `GET /repos/:owner/:repo/issues`
   - New: `GET /repos/{owner}/{repo}/issues`
 

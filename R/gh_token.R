@@ -25,6 +25,17 @@
 #' point on, gh (via [gitcreds::gitcreds_get()]) should be able to find it
 #' without further effort on your part.
 #'
+#' # Token format validation
+#'
+#' gh warns if the PAT it retrieves does not match a known format.
+#' Set `options(gh_validate_tokens = "off")` or the
+#' `GH_VALIDATE_TOKENS=off` environment variable to avoid this warning.
+#' The option takes precedence over the environment variable.
+#'
+#' Set `options(gh_validate_tokens = "error")` or the
+#' `GH_VALIDATE_TOKENS=error` environment variable to make gh throw an
+#' error for an unrecognized PAT format.
+#'
 #' @param api_url GitHub API URL. Defaults to the `GITHUB_API_URL` environment
 #'   variable, if set, and otherwise to <https://api.github.com>.
 #'
@@ -45,7 +56,7 @@
 #' }
 gh_token <- function(api_url = NULL) {
   api_url <- api_url %||% default_api_url()
-  stopifnot(is.character(api_url), length(api_url) == 1)
+  check_string(api_url)
   host_url <- get_hosturl(api_url)
   # Check for credentials supplied by Posit Connect.
   if (is_installed("connectcreds")) {
@@ -69,7 +80,7 @@ gh_token_exists <- function(api_url = NULL) {
 
 gh_auth <- function(token) {
   if (isTRUE(token != "")) {
-    if (any(grepl("\\W", token))) {
+    if (any(grepl("\\s", token))) {
       warning("Token contains whitespace characters")
     }
     c("Authorization" = paste("token", trim_ws(token)))
@@ -89,30 +100,81 @@ new_gh_pat <- function(x) {
 
 # validates PAT only in a very narrow, technical, and local sense
 validate_gh_pat <- function(x) {
-  stopifnot(inherits(x, "gh_pat"))
+  if (!inherits(x, "gh_pat")) {
+    stop_input_type(x, "a <gh_pat> object")
+  }
+  mode <- get_validate_tokens_mode()
+  if (mode == "off") {
+    return(x)
+  }
   if (
     x == "" ||
       # https://github.blog/changelog/2021-03-04-authentication-token-format-updates/
       # Fine grained tokens start with "github_pat_".
       # https://github.blog/changelog/2022-10-18-introducing-fine-grained-personal-access-tokens/
+      # GitHub App installation tokens start with "ghs_".
+      # https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/
       grepl(
-        "^(gh[pousr]_[A-Za-z0-9_]{36,251}|github_pat_[A-Za-z0-9_]{36,244})$",
+        "^(gh[pousr]_[A-Za-z0-9_]{36,251}|github_pat_[A-Za-z0-9_]{36,244}|ghs_.+)$",
         x
       ) ||
       grepl("^[[:xdigit:]]{40}$", x)
   ) {
-    x
+    return(x)
+  }
+  url <- "https://gh.r-lib.org/articles/managing-personal-access-tokens.html"
+  msg <- c(
+    "Invalid GitHub PAT format",
+    "i" = "A GitHub PAT must have one of four forms:",
+    "*" = "40 hexadecimal digits (older PATs)",
+    "*" = "A 'ghp_' prefix followed by 36 to 251 more characters (newer
+           PATs)",
+    "*" = "A `ghs_` prefix followed by about 500 characters (GitHub App
+           installation tokens)",
+    "*" = "A 'github_pat_' prefix followed by 36 to 244 more characters
+           (fine-grained PATs)",
+    "i" = "Read more at {.url {url}}."
+  )
+  sil <- c(
+    "i" = "Set {.code options(gh_validate_tokens = \"off\")} or env var
+           {.envvar GH_VALIDATE_TOKENS=off} to silence this."
+  )
+  if (mode == "warn") {
+    cli::cli_warn(
+      c(msg, sil),
+      .frequency = "regularly",
+      .frequency_id = "gh_invalid_pat"
+    )
+    return(x)
+  }
+  cli::cli_abort(msg)
+}
+
+# Resolve token-validation mode: option > env var > "warn".
+get_validate_tokens_mode <- function() {
+  opt <- getOption("gh_validate_tokens")
+  if (is.null(opt)) {
+    env <- Sys.getenv("GH_VALIDATE_TOKENS", unset = "")
+    mode <- if (nzchar(env)) env else "warn"
   } else {
-    url <- "https://gh.r-lib.org/articles/managing-personal-access-tokens.html"
+    mode <- opt
+  }
+  if (!is.character(mode) || length(mode) != 1L || is.na(mode)) {
     cli::cli_abort(c(
-      "Invalid GitHub PAT format",
-      "i" = "A GitHub PAT must have one of three forms:",
-      "*" = "40 hexadecimal digits (older PATs)",
-      "*" = "A 'ghp_' prefix followed by 36 to 251 more characters (newer PATs)",
-      "*" = "A 'github_pat_' prefix followed by 36 to 244 more characters (fine-grained PATs)",
-      "i" = "Read more at {.url {url}}."
+      "Invalid token validation setting: must be a single string.",
+      "i" = "Got {.obj_type_friendly {mode}}."
     ))
   }
+  mode <- tolower(mode)
+  if (!mode %in% c("off", "warn", "error")) {
+    cli::cli_abort(c(
+      "Invalid token validation mode: {.val {mode}}.",
+      "i" = "Must be one of {.val off}, {.val warn}, or {.val error}.",
+      "i" = "Configure via {.code options(gh_validate_tokens = ...)} or
+             env var {.envvar GH_VALIDATE_TOKENS}."
+    ))
+  }
+  mode
 }
 
 gh_pat <- function(x) {

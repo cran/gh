@@ -121,8 +121,26 @@ body, as JSON.
 \item Convert the response to an R list using \code{\link[jsonlite:fromJSON]{jsonlite::fromJSON()}}.
 }
 }
+\section{Caching}{
+
+\code{gh()} uses httr2's HTTP cache by default. It is stored in
+\code{tools::R_user_dir("gh", "cache")}, capped at 100 MB, and shared
+across R sessions. When the cache holds a previous response for a
+request, \code{gh()} lets httr2 attach \code{If-None-Match} / \code{If-Modified-Since}
+headers automatically and replays the cached body on a \verb{304 Not Modified} reply, so the call doesn't count against your GitHub rate
+limit. Set \code{options(gh_cache = FALSE)} to disable, or delete the
+directory above to clear it.
+
+If you pass \code{If-None-Match} (or \code{If-Modified-Since}) yourself via
+\code{.send_headers}, httr2's cache does not intervene: a \code{304} response
+is returned as an empty \code{gh_response} with the response headers
+(including \code{ETag}) still attached on \code{attr(res, "response")}. You are
+responsible for holding on to the previous body and matching it
+against the ETag.
+}
+
 \examples{
-\dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) withAutoprint(\{ # examplesIf}
 ## Repositories of a user, these are equivalent
 gh("/users/hadley/repos", .limit = 2)
 gh("/users/{username}/repos", username = "hadley", .limit = 2)
@@ -131,11 +149,11 @@ gh("/users/{username}/repos", username = "hadley", .limit = 2)
 gh("/users/hadley/starred", .limit = 2)
 gh("/users/{username}/starred", username = "hadley", .limit = 2)
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## Create a repository, needs a token (see gh_token())
 gh("POST /user/repos", name = "foobar")
 \dontshow{\}) # examplesIf}
-\dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (identical(Sys.getenv("IN_PKGDOWN"), "true")) withAutoprint(\{ # examplesIf}
 ## Issues of a repository
 gh("/repos/hadley/dplyr/issues")
 gh("/repos/{owner}/{repo}/issues", owner = "hadley", repo = "dplyr")
@@ -144,24 +162,24 @@ gh("/repos/{owner}/{repo}/issues", owner = "hadley", repo = "dplyr")
 users <- gh("/users", .limit = 50)
 length(users)
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## Access developer preview of Licenses API (in preview as of 2015-09-24)
 gh("/licenses") # used to error code 415
 gh("/licenses", .accept = "application/vnd.github.drax-preview+json")
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## Access Github Enterprise API
 ## Use GITHUB_API_URL environment variable to change the default.
 gh("/user/repos", type = "public", .api_url = "https://github.foobar.edu/api/v3")
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## Use I() to force body part to be sent as an array, even if length 1
 ## This works whether assignees has length 1 or > 1
 assignees <- "gh_user"
 assignees <- c("gh_user1", "gh_user2")
 gh("PATCH /repos/OWNER/REPO/issues/1", assignees = I(assignees))
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## There are two ways to send JSON data. One is that you supply one or
 ## more objects that will be converted to JSON automatically via
 ## jsonlite::toJSON(). In this case sometimes you need to use
@@ -196,7 +214,7 @@ gh::gh(
   )
 )
 \dontshow{\}) # examplesIf}
-\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (FALSE) withAutoprint(\{ # examplesIf}
 ## Pass along a query to the search/code endpoint via the ... argument
 x <- gh::gh(
             "/search/code",

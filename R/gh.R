@@ -76,6 +76,23 @@
 #'   `list`. Failed requests will generate an R error. Requests that
 #'   generate a raw response will return a raw vector.
 #'
+#' @section Caching:
+#' `gh()` uses httr2's HTTP cache by default. It is stored in
+#' `tools::R_user_dir("gh", "cache")`, capped at 100 MB, and shared
+#' across R sessions. When the cache holds a previous response for a
+#' request, `gh()` lets httr2 attach `If-None-Match` / `If-Modified-Since`
+#' headers automatically and replays the cached body on a `304 Not
+#' Modified` reply, so the call doesn't count against your GitHub rate
+#' limit. Set `options(gh_cache = FALSE)` to disable, or delete the
+#' directory above to clear it.
+#'
+#' If you pass `If-None-Match` (or `If-Modified-Since`) yourself via
+#' `.send_headers`, httr2's cache does not intervene: a `304` response
+#' is returned as an empty `gh_response` with the response headers
+#' (including `ETag`) still attached on `attr(res, "response")`. You are
+#' responsible for holding on to the previous body and matching it
+#' against the ETag.
+#'
 #' @export
 #' @seealso [gh_gql()] if you want to use the GitHub GraphQL API,
 #' [gh_whoami()] for details on GitHub API token management.
@@ -199,58 +216,22 @@ gh <- function(
     method = .method
   )
 
-  if (req$method == "GET") check_named_nas(params)
-
-  raw <- gh_make_request(req)
-  res <- gh_process_response(raw, req)
-  len <- gh_response_length(res)
-
-  if (.progress && !is.null(.limit)) {
-    pages <- min(gh_extract_pages(res), ceiling(.limit / per_page))
-    cli::cli_progress_bar("Running gh query", total = pages)
-    cli::cli_progress_update() # already done one
+  if (req$method == "GET") {
+    check_named_nas(params)
   }
 
-  while (!is.null(.limit) && len < .limit && gh_has_next(res)) {
-    res2 <- gh_next(res, .token = .token, .send_headers = .send_headers)
-    len <- len + gh_response_length(res2)
-    if (.progress) cli::cli_progress_update()
-
-    if (!is.null(names(res2)) && identical(names(res), names(res2))) {
-      res3 <- mapply(
-        # Handle named array case
-        function(x, y, n) {
-          # e.g. GET /search/repositories
-          z <- c(x, y)
-          atm <- is.atomic(z)
-          if (atm && n %in% c("total_count", "incomplete_results")) {
-            y
-          } else if (atm) {
-            unique(z)
-          } else {
-            z
-          }
-        },
-        res,
-        res2,
-        names(res),
-        SIMPLIFY = FALSE
-      )
-    } else {
-      # Handle unnamed array case
-      res3 <- c(res, res2) # e.g. GET /orgs/:org/invitations
-    }
-
-    attributes(res3) <- attributes(res2)
-    res <- res3
+  if (is.null(.limit)) {
+    raw <- gh_make_request(req)
+    return(gh_process_response(raw, req))
   }
 
-  if (.progress) cli::cli_progress_done()
+  res <- gh_paginate(req, .limit, per_page, .progress)
+  len <- attr(res, "gh_pagination_length")
+  attr(res, "gh_pagination_length") <- NULL
 
   # We only subset for a non-named response.
   if (
-    !is.null(.limit) &&
-      len > .limit &&
+    len > .limit &&
       !"total_count" %in% names(res) &&
       length(res) == len
   ) {
@@ -260,6 +241,174 @@ gh <- function(
   }
 
   res
+}
+
+gh_paginate <- function(
+  gh_req,
+  .limit,
+  per_page,
+  .progress,
+  error_call = caller_env()
+) {
+  httr2_req <- gh_build_httr2_request(gh_req)
+  limit <- .limit
+  max_reqs <- if (is.infinite(limit)) Inf else ceiling(limit / per_page)
+  next_url <- httr2::iterate_with_link_url(rel = "next")
+
+  page <- 0L
+  n_items <- 0L
+  # Totals are known up front when `.limit` is finite; otherwise NA until
+  # we (possibly) learn them from the "last" Link header on page 1.
+  display_total <- if (is.finite(limit)) limit else NA_integer_
+  display_pages <- if (is.finite(max_reqs)) max_reqs else NA_integer_
+
+  # Progress bar lifecycle: always open with an initial spinner. After the
+  # first response we tear it down and re-open with one of two formats:
+  #   - "determinate": filled bar + % + counts + ETA  (totals known)
+  #   - "indeterminate": spinner + counts + elapsed   (totals unknown,
+  #                      e.g. cursor-paginated endpoints with no rel=last)
+  fmt_init <- "{cli::pb_spin} Fetching... | {cli::pb_elapsed}"
+  fmt_determinate <- paste(
+    "{cli::pb_bar} {cli::pb_percent} |",
+    "{n_items}/{display_total} items, page {page}/{display_pages} |",
+    "ETA {cli::pb_eta}"
+  )
+  fmt_indeterminate <-
+    "{cli::pb_spin} {n_items} items, page {page} | {cli::pb_elapsed}"
+
+  if (isTRUE(.progress)) {
+    cli::cli_progress_bar(
+      format = fmt_init,
+      clear = TRUE,
+      .envir = environment()
+    )
+  }
+
+  res <- NULL
+  cur_req <- httr2_req
+  tryCatch(
+    repeat {
+      page <- page + 1L
+      resp <- httr2::req_perform(cur_req)
+      if (httr2::resp_status(resp) >= 400) {
+        gh_error(resp, gh_req = gh_req, error_call = error_call)
+      }
+      res2 <- gh_process_response(resp, gh_req)
+      n_items <- n_items + gh_response_length(res2)
+      res <- if (is.null(res)) res2 else gh_merge_pages(res, res2)
+
+      # After page 1: discover total from the "last" link if available, then
+      # swap the initial spinner for the appropriate final progress bar.
+      if (page == 1L) {
+        if (is.na(display_total)) {
+          last_url <- httr2::resp_link_url(resp, "last")
+          if (!is.null(last_url)) {
+            last_page <- as.integer(httr2::url_parse(last_url)$query$page)
+            if (!is.na(last_page)) {
+              display_pages <- last_page
+              display_total <- last_page * per_page
+            }
+          }
+        }
+        if (isTRUE(.progress)) {
+          cli::cli_progress_done()
+          cli::cli_progress_bar(
+            total = if (is.na(display_total)) NA else display_total,
+            format = if (is.na(display_total)) {
+              fmt_indeterminate
+            } else {
+              fmt_determinate
+            },
+            clear = TRUE,
+            .envir = environment()
+          )
+        }
+      }
+
+      if (isTRUE(.progress)) {
+        cli::cli_progress_update(
+          set = if (is.na(display_total)) NULL else min(n_items, display_total),
+          force = TRUE
+        )
+      }
+
+      if (page >= max_reqs) {
+        break
+      }
+      nxt <- next_url(resp, cur_req)
+      if (is.null(nxt)) {
+        break
+      }
+      cur_req <- nxt
+    },
+    interrupt = function(e) {
+      if (isTRUE(.progress)) {
+        cli::cli_progress_done() # nocov
+      }
+      cond <- structure(
+        class = c("gh_interrupt", "interrupt", "condition"),
+        list(
+          message = cli::format_inline(
+            "{.fn gh} interrupted after fetching {n_items} record{?s}."
+          ),
+          call = error_call,
+          gh_result = res
+        )
+      )
+      withRestarts(
+        {
+          signalCondition(cond)
+          # No exiting handler claimed it. Stash for `rlang::last_error()`
+          # recovery, then propagate as a real interrupt.
+          asNamespace("rlang")$poke_last_error(cond) # nocov
+          # nocov start
+          cli::cli_inform(
+            c(
+              "!" = cond$message,
+              "i" = paste(
+                "Partial results are available in",
+                "{.code rlang::last_error()$gh_result}."
+              )
+            )
+          )
+          # nocov end
+          rlang::interrupt() # nocov
+        },
+        muffle_gh_interrupt = function() invisible(NULL)
+      )
+    }
+  )
+
+  attr(res, "gh_pagination_length") <- n_items
+  res
+}
+
+gh_merge_pages <- function(res, res2) {
+  if (!is.null(names(res2)) && identical(names(res), names(res2))) {
+    out <- mapply(
+      # Handle named array case (e.g. GET /search/repositories)
+      function(x, y, n) {
+        z <- c(x, y)
+        atm <- is.atomic(z)
+        if (atm && n %in% c("total_count", "incomplete_results")) {
+          y
+        } else if (atm) {
+          unique(z)
+        } else {
+          z
+        }
+      },
+      res,
+      res2,
+      names(res),
+      SIMPLIFY = FALSE
+    )
+  } else {
+    # Handle unnamed array case (e.g. GET /orgs/:org/invitations)
+    out <- c(res, res2)
+  }
+  attributes(out) <- attributes(res2)
+  out
 }
 
 gh_response_length <- function(res) {
@@ -280,7 +429,7 @@ gh_response_length <- function(res) {
   }
 }
 
-gh_make_request <- function(x, error_call = caller_env()) {
+gh_build_httr2_request <- function(x) {
   if (!x$method %in% c("GET", "POST", "PATCH", "PUT", "DELETE")) {
     cli::cli_abort("Unknown HTTP verb: {.val {x$method}}")
   }
@@ -312,14 +461,12 @@ gh_make_request <- function(x, error_call = caller_env()) {
     )
   }
 
-  if (!is_testing()) {
-    req <- httr2::req_retry(
-      req,
-      max_tries = 3,
-      is_transient = function(resp) github_is_transient(resp, x$max_wait),
-      after = github_after
-    )
-  }
+  req <- httr2::req_retry(
+    req,
+    max_tries = 3,
+    is_transient = function(resp) github_is_transient(resp, x$max_wait),
+    after = github_after
+  )
 
   if (!is.null(x$max_rate)) {
     req <- httr2::req_throttle(req, x$max_rate)
@@ -328,6 +475,11 @@ gh_make_request <- function(x, error_call = caller_env()) {
   # allow custom handling with gh_error
   req <- httr2::req_error(req, is_error = function(resp) FALSE)
 
+  req
+}
+
+gh_make_request <- function(x, error_call = caller_env()) {
+  req <- gh_build_httr2_request(x)
   resp <- httr2::req_perform(req, path = x$desttmp)
   if (httr2::resp_status(resp) >= 400) {
     gh_error(resp, gh_req = x, error_call = error_call)
@@ -341,7 +493,9 @@ gh_error <- function(response, gh_req, error_call = caller_env()) {
   heads <- httr2::resp_headers(response)
   res <- httr2::resp_body_json(response)
   status <- httr2::resp_status(response)
-  if (!is.null(gh_req$desttmp)) unlink(gh_req$desttmp)
+  if (!is.null(gh_req$desttmp)) {
+    unlink(gh_req$desttmp)
+  }
 
   msg <- "GitHub API error ({status}): {heads$status %||% ''} {res$message}"
 
@@ -356,6 +510,15 @@ gh_error <- function(response, gh_req, error_call = caller_env()) {
 
   errors <- res$errors
   if (!is.null(errors)) {
+    # GitHub usually returns `errors` as an array of objects, but some 422s
+    # (e.g. exceeding the max statuses for a (sha, context) pair) return it
+    # as a plain string. Wrap any non-list entries in a `message` field.
+    if (!is.list(errors)) {
+      errors <- as.list(errors)
+    }
+    errors <- lapply(errors, function(e) {
+      if (is.list(e)) e else list(message = as.character(e))
+    })
     errors <- as.data.frame(do.call(rbind, errors))
     nms <- c("resource", "field", "code", "message")
     nms <- nms[nms %in% names(errors)]

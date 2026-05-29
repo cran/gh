@@ -2,12 +2,6 @@ trim_ws <- function(x) {
   sub("\\s*$", "", sub("^\\s*", "", x))
 }
 
-## from devtools, among other places
-compact <- function(x) {
-  is_empty <- vapply(x, function(x) length(x) == 0, logical(1))
-  x[!is_empty]
-}
-
 ## from purrr, among other places
 `%||%` <- function(x, y) {
   if (is.null(x)) {
@@ -58,7 +52,12 @@ discard <- function(.x, .p, ...) {
 }
 probe <- function(.x, .p, ...) {
   if (is.logical(.p)) {
-    stopifnot(length(.p) == length(.x))
+    if (length(.p) != length(.x)) {
+      cli::cli_abort(
+        "{.arg .p} must have the same length as {.arg .x}.",
+        .internal = TRUE
+      )
+    }
     .p
   } else {
     vapply(.x, .p, logical(1), ...)
@@ -89,30 +88,8 @@ check_named_nas <- function(x) {
   })
   bad <- which(named & na)
   if (length(bad)) {
-    str <- paste0("`", names(x)[bad], "`", collapse = ", ")
-    stop("Named NA parameters are not allowed: ", str)
+    cli::cli_abort(
+      "Named NA parameters are not allowed: {.code {names(x)[bad]}}"
+    )
   }
-}
-
-can_load <- function(pkg) {
-  isTRUE(requireNamespace(pkg, quietly = TRUE))
-}
-
-is_interactive <- function() {
-  opt <- getOption("rlib_interactive")
-  if (isTRUE(opt)) {
-    TRUE
-  } else if (identical(opt, FALSE)) {
-    FALSE
-  } else if (tolower(getOption("knitr.in.progress", "false")) == "true") {
-    FALSE
-  } else if (identical(Sys.getenv("TESTTHAT"), "true")) {
-    FALSE
-  } else {
-    interactive()
-  }
-}
-
-is_testing <- function() {
-  identical(Sys.getenv("TESTTHAT"), "true")
 }
